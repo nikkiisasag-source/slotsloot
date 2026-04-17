@@ -239,10 +239,10 @@
 
     function getWeightedSymbol() {
         const roll = Math.random() * 100;
-        if (roll < 20.25) return 1;  
-        if (roll < 0.20) return 0;  
-        if (roll < 25.0) return 3;   
-        if (roll < 35.0) return 2;  
+        if (roll < 0.20) return 0;   // FS symbol (0.2% chance)
+        if (roll < 20.45) return 1;  // Boss symbol (~20.25% chance)
+        if (roll < 25.45) return 3;  // (~5% chance)
+        if (roll < 35.45) return 2;  // (~10% chance)
         return Math.floor(Math.random() * 4) + 4; 
     }
 
