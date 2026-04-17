@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Root Engine: Direct Triggers</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <style>
+            /* MEGA SYMBOL OVERLAY */
+        .mega-symbol {
+            position: absolute;
+            width: 200%; /* Spans 2 columns */
+            height: 200%; /* Spans 2 rows */
+            background-image: url('https://i.ibb.co/39XXTgwS/Grid-Art-20260416-073645036.webp');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 20;
+            pointer-events: none;
+            animation: approach 0.5s ease-out;
+        }
+
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; color: #fff; font-family: sans-serif; user-select: none; }
+        #layer1-bg { z-index: 0; position: fixed; inset: 0; }
+        #starfield-canvas { z-index: 1; position: fixed; inset: 0; pointer-events: none; }
+        #layer2-game { z-index: 2; position: relative; height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #lazer-canvas { z-index: 3; position: fixed; inset: 0; pointer-events: none; }
+        #layer3-ui-cockpit { z-index: 5; position: fixed; inset: 0; pointer-events: none; } 
+        #top-deck-ui { z-index: 20; position: fixed; inset: 0; pointer-events: none; }
+        
+        .interactive { pointer-events: auto; }
+
+        .slot-grid { 
+            display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr); 
+            gap: 2px; height: 38vh; width: 72vw; max-width: 320px; 
+            background: rgba(0,0,0,0.6); border: 0px solid rgba(0,255,255,0.2);
+        }
+
+                                #boss-reel-container {
+            display: none; 
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px; 
+            width: 90vw; 
+            max-width: 420px; 
+            aspect-ratio: 3 / 1.1; 
+            padding: 5% 6%; /* Pushes the reels inward */
+            box-sizing: border-box; /* STOPS THE STRETCHING */
+            
+            background-image: url('https://i.ibb.co/h0mGkp9/Grid-Art-20260417-015839239.webp');
+            background-size: 100% 100%;
+            background-color: #000; 
+            background-position: center;
+            background-repeat: no-repeat;
+            
+            border: 2px solid #220000; 
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.9), inset 0 0 30px rgba(255,0,0,0.2);
+            z-index: 30;
+        }
+
+        #boss-reel-container .slot-cell {
+            width: 100%;
+            height: 100%;
+            min-height: 60px; /* Forces the cell open to show the symbol */
+            position: relative;
+        }
+        /* The Animation Class */
+        .emerge-up {
+            animation: emergeFromBelow 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes emergeFromBelow {
+            0% { transform: translateY(150px) scale(0.8); opacity: 0; filter: blur(4px); }
+            100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+        }
+@keyframes vaporize { 
+    0% { transform: scale(1); filter: brightness(1) contrast(1); opacity: 1; } 
+    25% { transform: scale(1.1) rotate(2deg); filter: brightness(4) hue-rotate(-20deg); }
+    100% { transform: scale(1.6) rotate(-5deg); filter: brightness(10) blur(12px) hue-rotate(90deg); opacity: 0; } 
+}
+
+/* Add this for the cell impact effect */
+.impact-flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    border-radius: 50%;
+    animation: flashOut 0.3s ease-out forwards;
+    z-index: 30;
+}
+
+@keyframes flashOut {
+    0% { transform: scale(0); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+        .symbol-dissolve { animation: dissolve 0.5s ease-in forwards; }
+        @keyframes dissolve { 0% { transform: scale(1); opacity: 1; filter: brightness(2); } 100% { transform: scale(1.5); opacity: 0; filter: hue-rotate(90deg); } }
+
+        .sprite-symbol { 
+            background-image: url('https://i.ibb.co/F4Qh8NXc/Grid-Art-20260416-081112835.webp'); 
+            background-size: 400% 200%; width: 100%; height: 95%; background-repeat: no-repeat;
+        }
+        .bonus-symbol { 
+            background-image: url('https://i.ibb.co/TxYyrq8P/Grid-Art-20260416-093105676.webp'); 
+            background-size: 200% 300%; width: 100%; height: 100%; background-repeat: no-repeat;
+        }
+
+        #boss-hud { position: absolute; top: 11%; width: 100%; display: none; flex-direction: column; align-items: center; z-index: 10; }
+        #boss-sprite-view { 
+            width: 130px; height: 90px; background-size: 300% 200%; background-repeat: no-repeat;
+            animation: bossHover 5s ease-in-out infinite; margin-bottom: 5px;
+        }
+        @keyframes bossHover {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(15px, -8px) rotate(2deg); }
+            66% { transform: translate(-10px, 5px) rotate(-2deg); }
+        }
+
+        .hud-box { position: absolute; text-align: center; }
+        #credit-hud { left: 5%; top: 4%; }
+        #win-hud { right: 5%; top: 4%; }
+        #controls-layer { position: absolute; bottom: 8%; width: 100%; display: flex; flex-direction: column; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div id="layer1-bg" class="bg-cover bg-center" style="background-image: url('https://wallpapers.com/images/hd/space-aesthetic-black-cosmos-mtzv89otovidg2rp.jpg');"></div>
+    <canvas id="starfield-canvas"></canvas> 
+    <div id="layer3-ui-cockpit" class="bg-cover bg-center" style="background-image: url('https://i.ibb.co/yF4jbgpj/1776329142823.webp');"></div>
+    <canvas id="lazer-canvas"></canvas>
+
+    <div id="boss-hud">
+        <div id="boss-sprite-view"></div>
+        <div class="text-[10px] font-bold text-red-500 tracking-tighter" id="boss-name">THREAT IDENTIFIED</div>
+        <div class="w-[240px] h-[10px] bg-gray-900 border border-red-900 rounded-full overflow-hidden">
+            <div id="hp-fill" class="h-full bg-red-600 w-full transition-all duration-300"></div>
+        </div>
+        <div class="text-red-400 font-black text-lg mt-1" id="rounds-display">STRIKES: 10</div>
+    </div>
+
+    <div id="layer2-game">
+        <div class="slot-grid" id="slotGrid"></div>
+        <div id="boss-reel-container">
+            <div id="br-0" class="slot-cell"></div>
+            <div id="br-1" class="slot-cell"></div>
+            <div id="br-2" class="slot-cell"></div>
+        </div>
+    </div>
+
+    <div id="top-deck-ui">
+        <div id="credit-hud" class="hud-box">
+            <div class="text-[10px] text-cyan-300 font-bold">CREDITS</div>
+            <div id="balanceDisplay" class="text-3xl font-black text-cyan-400">100.00</div>
+        </div>
+        <div id="win-hud" class="hud-box">
+            <div class="text-[10px] text-yellow-300 font-bold">WIN</div>
+            <div id="winDisplay" class="text-3xl font-black text-yellow-400">0.00</div>
+        </div>
+        <div id="controls-layer">
+            <div id="fsCounter" class="hidden text-cyan-300 font-bold animate-pulse text-lg mb-2">AUTO-PULSE: <span id="fsNum" class="text-2xl">0</span></div>
+            <div class="flex gap-4 mb-4">
+    <button id="turboBtn" onclick="toggleTurbo()" class="interactive bg-gray-800 border border-cyan-500/50 px-4 py-1 rounded text-[10px] font-bold text-cyan-400">TURBO: OFF</button>
+    <button id="autoBtn" onclick="toggleAuto()" class="interactive bg-gray-800 border border-yellow-500/50 px-4 py-1 rounded text-[10px] font-bold text-yellow-400">AUTO: OFF</button>
+</div>
+
+            <button id="spinBtn" onclick="spinRouter()" class="interactive bg-red-700 hover:bg-red-600 w-48 h-14 rounded-full font-black text-xl shadow-[0_0_20px_rgba(255,0,0,0.4)] border-b-4 border-red-900 active:translate-y-1 transition-all">ENGAGE FIRE</button>
+        </div>
+    </div>
+
+    <div id="initGate" class="fixed inset-0 z-[5000] bg-black flex flex-col items-center justify-center">
+        <button onclick="startGame()" class="bg-red-600 px-12 py-4 rounded-full font-bold text-white animate-pulse">BOOT SYSTEM</button>
+    </div>
+
+    <div id="bossModal" class="fixed inset-0 z-[6000] bg-red-950/95 hidden flex-col items-center justify-center text-center">
+        <h2 class="text-white text-6xl font-black mb-8 italic animate-bounce">BOSS DETECTED</h2>
+        <button onclick="enterBossFight()" class="bg-white text-red-900 px-16 py-5 rounded-full font-black text-2xl interactive">INTERCEPT</button>
+    </div>
+    <script>
+        function spinRouter() {
+        if (state.isBossFight) {
+            handleBossSpin();
+        } else {
+            processSpin();
+        }
+    }
+        const sfx = {
+        laser: new Audio('https://od.lk/s/MTVfODE2MjYxNDBf/freesound_community-laser6quick-47339.mp3'),
+        spin: new Audio('https://od.lk/s/MTVfODE0NzQ1OTFf/stereogenicstudio-swish-swoosh-woosh-sfx-20-357172.mp3'),
+        bgm: new Audio('https://od.lk/s/MTVfODE2MjYxNDhf/idoberg-deep-space-loop-401165.mp3')
+    };
+
+    const SYMBOLS = [
+        { id: 0, pos: '0% 0%', type: 'fs' }, 
+        { id: 1, pos: '33.33% 0%', type: 'boss' },                     
+        { id: 2, pos: '66.66% 0%', pay: [0.5, 1.5, 5.0] },
+        { id: 3, pos: '100% 0%', pay: [1.0, 3.0, 10.0] },
+        { id: 4, pos: '0% 100%', pay: [0.01, 0.02, 0.05] },
+        { id: 5, pos: '33.33% 100%', pay: [0.01, 0.03, 0.06] },            
+        { id: 6, pos: '66.66% 100%', pay: [0.02, 0.04, 0.08] }, 
+        { id: 7, pos: '100% 100%', pay: [0.02, 0.05, 0.10] }, 
+        { id: 8, url: 'https://i.ibb.co/7dccSsHr/Grid-Art-20260416-073645036.webp', pay: [5.0, 15.0, 50.0] }
+    ];
+
+    const BONUS_SYMBOLS = [
+    { id: 0, pos: '0% 0%', dmg: 25 },    // TL: Most Damage
+    { id: 1, pos: '50% 0%', dmg: 18 },   // TR
+    { id: 2, pos: '100% 0%', dmg: 15 },  // ML
+    { id: 3, pos: '0% 100%', dmg: 15 },  // MR
+    { id: 4, pos: '50% 100%', dmg: 12 },  // BL
+    { id: 5, pos: '100% 100%', dmg: 10 }  // BR: Least Damage
+];
+
+
+    let state = { 
+        balance: 100, bet: 0.25, currentWin: 0, isSpinning: false, 
+        freeSpins: 0, pendingFS: 0, pendingBoss: false,
+        isBossFight: false, bossRounds: 10, totalFightDmg: 0,
+        miniDefeated: false, bossDefeated: false, miniHP: 100, bossHP: 220,
+        isTurbo: false, isAutoSpin: false
+    };
+    
+    let grid = Array.from({length: 5}, () => Array(5).fill(-1));
+    let bossGrid = [-1, -1, -1];
+
+    const wait = (ms) => new Promise(res => setTimeout(res, state.isTurbo ? ms / 4 : ms));
+
+    function toggleTurbo() {
+        state.isTurbo = !state.isTurbo;
+        document.getElementById('turboBtn').innerText = `TURBO: ${state.isTurbo ? 'ON' : 'OFF'}`;
+        document.getElementById('turboBtn').classList.toggle('bg-cyan-900');
+    }
+
+    function toggleAuto() {
+        state.isAutoSpin = !state.isAutoSpin;
+        document.getElementById('autoBtn').innerText = `AUTO: ${state.isAutoSpin ? 'ON' : 'OFF'}`;
+        document.getElementById('autoBtn').classList.toggle('bg-yellow-900');
+        if(state.isAutoSpin && !state.isSpinning) processSpin();
+    }
+
+    function getWeightedSymbol() {
+        const roll = Math.random() * 100;
+        if (roll < 20.25) return 1;  
+        if (roll < 0.20) return 0;  
+        if (roll < 25.0) return 3;   
+        if (roll < 35.0) return 2;  
+        return Math.floor(Math.random() * 4) + 4; 
+    }
+
+    function init() {
+        initStars();
+        const gridEl = document.getElementById('slotGrid');
+        for(let r=0; r<5; r++) for(let c=0; c<5; c++) {
+            grid[r][c] = getWeightedSymbol();
+            gridEl.innerHTML += `<div id="cell-${r}-${c}" class="slot-cell"></div>`;
+        }
+        updateGridUI();
+        requestAnimationFrame(drawStars);
+    }
+
+    function startGame() { 
+        document.getElementById('initGate').style.display = 'none'; 
+        sfx.bgm.play(); 
+        sfx.bgm.loop = true; 
+    }
+
+    async function processSpin() {
+        if(state.isSpinning) return;
+        state.isSpinning = true;
+
+        if(state.freeSpins > 0) {
+            state.freeSpins--;
+        } else {
+            if(state.balance < state.bet) { 
+                state.isSpinning = false; 
+                state.isAutoSpin = false;
+                alert("INSUFFICIENT CREDITS");
+                return; 
+            }
+            state.balance -= state.bet;
+            state.currentWin = 0;
+        }
+
+        document.getElementById('spinBtn').disabled = true;
+        updateUI();
+
+        for(let r=0; r<5; r++) for(let c=0; c<5; c++) grid[r][c] = getWeightedSymbol();
+        updateGridUI(true); 
+        sfx.spin.play();
+        await wait(1000);
+
+        await handleCascades();
+
+        if (state.pendingFS > 0) {
+            state.freeSpins += state.pendingFS;
+            state.pendingFS = 0;
+        }
+
+        if (state.pendingBoss && !state.bossDefeated) {
+            document.getElementById('bossModal').style.display = 'flex';
+            state.pendingBoss = false;
+            return; 
+        }
+
+        updateUI();
+
+        if (state.freeSpins > 0 || state.isAutoSpin) {
+            await wait(state.isTurbo ? 200 : 800);
+            state.isSpinning = false; 
+            processSpin();
+        } else {
+            state.isSpinning = false;
+            document.getElementById('spinBtn').disabled = false;
+        }
+    }
+
+    async function handleCascades() {
+        let active = true;
+        while(active) {
+            let win = evaluateWins();
+            if(win) {
+                // 1. Lock Targets
+                win.coords.forEach(c => document.getElementById(`cell-${c.r}-${c.c}`).classList.add('lock-target'));
+                await wait(400);
+
+                // 2. Fire Upgraded Lasers
+                await fireLazers(win.coords);
+                
+                // 3. Trigger Dissolve & Impact
+                win.coords.forEach(c => {
+                    const cell = document.getElementById(`cell-${c.r}-${c.c}`);
+                    cell.classList.remove('lock-target');
+                    if(cell.firstChild) cell.firstChild.classList.add('symbol-dissolve');
+                    
+                    const flash = document.createElement('div');
+                    flash.className = 'impact-flash';
+                    cell.appendChild(flash);
+                });
+                
+                await wait(400);
+                
+                // 4. Update Logic & UI
+                win.coords.forEach(c => grid[c.r][c.c] = -1);
+                state.currentWin += (state.bet * win.val);
+                state.balance += (state.bet * win.val);
+
+                applyGravity();
+                updateUI();
+                updateGridUI(true);
+                await wait(600);
+            } else active = false;
+        }
+    }
+
+    function evaluateWins() {
+        for(let sym of SYMBOLS) {
+            let coords = [];
+            grid.forEach((row, r) => row.forEach((val, c) => { if(val === sym.id) coords.push({r,c}); }));
+            
+            if(coords.length >= 6) {
+                let val = 0;
+                if(sym.pay) {
+                    let idx = Math.min(coords.length - 6, 2);
+                    val = sym.pay[idx];
+                } else if(sym.type === 'fs') state.pendingFS += 8;
+                else if(sym.type === 'boss') state.pendingBoss = true;
+                
+                return {id: sym.id, coords, val: val};
+            }
+        }
+        return null;
+    }
+
+    async function fireLazers(coords, isBoss = false) {
+        sfx.laser.currentTime = 0;
+        sfx.laser.play();
+        const canvas = document.getElementById('lazer-canvas');
+        const ctx = canvas.getContext('2d');
+        const btnRect = document.getElementById('spinBtn').getBoundingClientRect();
+        const ox = btnRect.left + btnRect.width / 2;
+        const oy = btnRect.top + btnRect.height / 2;
+        
+        canvas.width = window.innerWidth; 
+        canvas.height = window.innerHeight;
+        
+        const gameLayer = document.getElementById('layer2-game');
+        
+        for(let i=0; i<12; i++) {
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            
+            // Screen Shake
+            if (i < 6) {
+                const intensity = isBoss ? 20 : 10;
+                gameLayer.style.transform = `translate(${(Math.random()-0.5)*intensity}px, ${(Math.random()-0.5)*intensity}px)`;
+            }
+
+            coords.forEach(c => {
+                let cell = document.getElementById(isBoss ? `br-${c.c}` : `cell-${c.r}-${c.c}`);
+                let r = cell.getBoundingClientRect();
+                const tx = r.left + r.width/2;
+                const ty = r.top + r.height/2;
+
+                // Outer Glow (Bloom)
+                ctx.beginPath();
+                ctx.moveTo(ox, oy);
+                ctx.lineTo(tx, ty);
+                ctx.lineWidth = 18;
+                ctx.strokeStyle = i % 2 === 0 ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 0, 100, 0.4)';
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = ctx.strokeStyle;
+                ctx.stroke();
+
+                // Core Beam
+                ctx.beginPath();
+                ctx.moveTo(ox, oy);
+                ctx.lineTo(tx, ty);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#fff';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#fff';
+                ctx.stroke();
+
+                // Impact Sparkle
+                ctx.fillStyle = "#fff";
+                ctx.beginPath();
+                ctx.arc(tx, ty, Math.random() * 15, 0, Math.PI*2);
+                ctx.fill();
+            });
+            await new Promise(res => requestAnimationFrame(res));
+        }
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        gameLayer.style.transform = `translate(0,0)`;
+    }
+
+    function applyGravity() {
+        for(let c=0; c<5; c++) {
+            let wp = 4;
+            for(let r=4; r>=0; r--) { 
+                if(grid[r][c] !== -1) { 
+                    grid[wp][c] = grid[r][c]; 
+                    if(wp !== r) grid[r][c] = -1; 
+                    wp--; 
+                } 
+            }
+            for(let r=wp; r>=0; r--) grid[r][c] = getWeightedSymbol();
+        }
+    }
+    function updateGridUI(withApproach = false) {
+    for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+            let cell = document.getElementById(`cell-${r}-${c}`);
+            if (!cell) continue;
+            cell.innerHTML = '';
+            if (grid[r][c] !== -1) {
+                const sym = SYMBOLS[grid[r][c]];
+                const div = document.createElement('div');
+                
+                // --- THE CHAOS ENGINE ---
+                // Random tilt: keeps the grid from looking like a perfect Excel sheet
+                const randomRot = (Math.random() * 8 - 4).toFixed(2); 
+                // Negative delay: starts the hover loop at a random point in time
+                const randomDelay = (Math.random() * -5).toFixed(2); 
+                
+                let classes = ['sprite-symbol'];
+                if (withApproach) classes.push('symbol-approach');
+                
+                // We apply hover to every symbol to keep the whole grid "humming"
+                classes.push('symbol-hover'); 
+                
+                div.className = classes.join(' ');
+                
+                // Inject the unique values into this specific symbol's CSS
+                div.style.setProperty('--rand-rot', `${randomRot}deg`);
+                div.style.animationDelay = `${randomDelay}s`;
+                
+                if (sym.url) {
+                    div.style.backgroundImage = `url('${sym.url}')`;
+                    div.style.backgroundSize = '
